@@ -22,13 +22,8 @@ jobs:
           echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
 
-      # Optional: Validate SSH key (uncomment if necessary)
-      # - name: Validate SSH Key
-      #   run: |
-      #     ssh-keygen -l -f ~/.ssh/id_rsa
-
-      # Copy files to EC2
-      - name: Copy Files to EC2
+      # Copy files to EC2 and install dependencies, build application, and restart in a single SSH connection
+      - name: Copy and Deploy Application
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -36,9 +31,6 @@ jobs:
           key: ~/.ssh/id_rsa
           source: "./"
           target: "/home/ec2-user/pv_app_api"
-
-      # Install dependencies, build application, and restart in a single SSH connection
-      - name: Install, Build, and Restart Application
         run: |
           ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
           cd /home/ec2-user/pv_app_api
