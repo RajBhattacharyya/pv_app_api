@@ -22,7 +22,7 @@ jobs:
           echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
 
-      # Validate SSH key (optional step, can be removed if not necessary)
+      # Optional: Validate SSH key (uncomment if necessary)
       # - name: Validate SSH Key
       #   run: |
       #     ssh-keygen -l -f ~/.ssh/id_rsa
@@ -37,9 +37,7 @@ jobs:
           source: "./"
           target: "/home/ec2-user/pv_app_api"
 
-      # Removed Validate Copied Files step as it's not necessary
-
-      # Install dependencies, build application, and restart
+      # Install dependencies, build application, and restart in a single SSH connection
       - name: Install, Build, and Restart Application
         run: |
           ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
@@ -53,11 +51,4 @@ jobs:
       - name: Validate Application Status
         run: |
           ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "pm2 status"
-
-      # Removed Clean Up, Reinstall Dependencies, and Final Application Restart steps
-      # as they seem redundant and can be optimized
-
-      # Optimized workflow reduces the number of steps and redundant operations
 ```
-
-The modified workflow eliminates unnecessary steps, such as validating the copied files and redundant application restarts. Additionally, it combines the `npm install`, `npm run build`, and `pm2 restart` commands into a single step to reduce the number of SSH connections and improve efficiency. The `Validate SSH Key` step has been commented out as it's optional and may not be necessary in all cases.
