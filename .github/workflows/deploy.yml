@@ -18,7 +18,8 @@ jobs:
       # Determine changed files to optimize the deployment process
       - name: Determine Changed Files
         run: |
-          echo "::set-output name=changed_files::$(git diff --name-only HEAD~1..HEAD)"
+          # Use git diff to find changed files, ignoring whitespace differences
+          echo "::set-output name=changed_files::$(git diff --name-only --ignore-space-at-eol HEAD~1..HEAD)"
         id: changed_files_step
 
       # Add SSH key for EC2 connection
@@ -48,12 +49,12 @@ jobs:
 
           # Only run npm install if package.json has changed
           if echo "${{ steps.changed_files_step.outputs.changed_files }}" | grep -q "package.json"; then
-            npm install
+            npm install --production # only install production dependencies
           fi
 
           # Only run npm run build if any of the relevant files have changed
           if echo "${{ steps.changed_files_step.outputs.changed_files }}" | grep -qE '(.js|.jsx|.css|.scss)'; then
-            npm run build
+            npm run build --if-present # only run build if script is present
           fi
 
           # Check if the application is already running, then restart
