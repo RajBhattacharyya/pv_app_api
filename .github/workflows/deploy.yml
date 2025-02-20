@@ -1,3 +1,4 @@
+```yml
 name: Deploy to AWS EC2
 
 on:
@@ -7,11 +8,21 @@ on:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    # Using an eco-friendly runner can help reduce carbon emissions
+    runs-on: ubuntu-latest (self-hosted) # Consider using self-hosted runners with low-power devices
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
+
+      # Caching node_modules to avoid repeated installations and reduce job duration
+      - name: Cache node_modules
+        uses: actions/cache@v3
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
 
       - name: Add SSH Key
         run: |
@@ -33,6 +44,15 @@ jobs:
           ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
           cd /home/ec2-user/pv_app_api
           git pull
-          npm install
+          npm ci # Using npm ci instead of npm install to leverage the cached node_modules
           pm2 restart app.js -i 0 || pm2 start app.js -i 0
           EOF
+
+      # Cleaning up to reduce storage usage and job duration
+      - name: Clean up
+        run: |
+          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
+          cd /home/ec2-user/pv_app_api
+          npm cache clean --force
+          EOF
+```
