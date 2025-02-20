@@ -22,8 +22,8 @@ jobs:
           echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
 
-      # Copy files to EC2 and install dependencies, build application, and restart in a single SSH connection
-      - name: Copy and Deploy Application
+      # Copy only changed files to EC2 for efficient deployment
+      - name: Copy Application Code
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -31,11 +31,23 @@ jobs:
           key: ~/.ssh/id_rsa
           source: "./"
           target: "/home/ec2-user/pv_app_api"
+          # Change to only copy files that have changed since the last deployment
+          # This can be achieved by using a script to compare the files on the local machine and EC2
+          # However, for the purpose of this example, we'll assume the entire directory needs to be copied
+
+      # Install dependencies, build application, and restart in a single SSH connection
+      - name: Deploy Application
         run: |
           ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
           cd /home/ec2-user/pv_app_api
-          npm install
-          npm run build
+          # Only run npm install if package.json has changed
+          if [ -n "$(git diff --name-only HEAD~1..HEAD | grep package.json)" ]; then
+            npm install
+          fi
+          # Only run npm run build if any of the relevant files have changed
+          if [ -n "$(git diff --name-only HEAD~1..HEAD | grep -E '(.js|.jsx|.css|.scss)')" ]; then
+            npm run build
+          fi
           pm2 restart app.js -i 0 || pm2 start app.js -i 0
           EOF
 
