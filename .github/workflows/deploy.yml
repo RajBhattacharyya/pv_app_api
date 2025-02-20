@@ -20,6 +20,9 @@ jobs:
         run: |
           # Use git diff to find changed files, ignoring whitespace differences
           echo "::set-output name=changed_files::$(git diff --name-only --ignore-space-at-eol HEAD~1..HEAD)"
+          # Also, store the output in a variable for later use
+          echo "::set-output name=has_package_json_changed::$(git diff --name-only --ignore-space-at-eol HEAD~1..HEAD | grep -q "package.json" && echo "true" || echo "false")"
+          echo "::set-output name=has_relevant_files_changed::$(git diff --name-only --ignore-space-at-eol HEAD~1..HEAD | grep -qE '(.js|.jsx|.css|.scss)' && echo "true" || echo "false")"
         id: changed_files_step
 
       # Add SSH key for EC2 connection
@@ -28,6 +31,14 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
+
+      # Only proceed with deployment if there are changes
+      - name: Check for Changes
+        run: |
+          if [ "${{ steps.changed_files_step.outputs.changed_files }}" == "" ]; then
+            echo "No changes detected, exiting workflow"
+            exit 0
+          fi
 
       # Copy only changed files to EC2 for efficient deployment
       # We use a script to compare the files on the local machine and EC2
@@ -39,7 +50,6 @@ jobs:
           key: ~/.ssh/id_rsa
           source: "./"
           target: "/home/ec2-user/pv_app_api"
-        if: steps.changed_files_step.outputs.changed_files != ''
 
       # Install dependencies, build application, and restart in a single SSH connection
       - name: Deploy and Validate Application
@@ -48,12 +58,12 @@ jobs:
           cd /home/ec2-user/pv_app_api
 
           # Only run npm install if package.json has changed
-          if echo "${{ steps.changed_files_step.outputs.changed_files }}" | grep -q "package.json"; then
+          if [ "${{ steps.changed_files_step.outputs.has_package_json_changed }}" == "true" ]; then
             npm install --production # only install production dependencies
           fi
 
           # Only run npm run build if any of the relevant files have changed
-          if echo "${{ steps.changed_files_step.outputs.changed_files }}" | grep -qE '(.js|.jsx|.css|.scss)'; then
+          if [ "${{ steps.changed_files_step.outputs.has_relevant_files_changed }}" == "true" ]; then
             npm run build --if-present # only run build if script is present
           fi
 
