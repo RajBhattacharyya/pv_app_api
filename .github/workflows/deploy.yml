@@ -1,5 +1,3 @@
-Here's the modified YAML with comments and optimizations for efficiency:
-
 ```yml
 name: Deploy to AWS EC2
 
@@ -22,7 +20,7 @@ jobs:
         run: |
           # Use git diff to find changed files, ignoring whitespace differences
           echo "::set-output name=changed_files::$(git diff --name-only --ignore-space-at-eol HEAD~1..HEAD)"
-          # Also, store the output in a variable for later use
+          # Also, store the output in variables for later use
           echo "::set-output name=has_package_json_changed::$(git diff --name-only --ignore-space-at-eol HEAD~1..HEAD | grep -q "package.json" && echo "true" || echo "false")"
           echo "::set-output name=has_relevant_files_changed::$(git diff --name-only --ignore-space-at-eol HEAD~1..HEAD | grep -qE '(.js|.jsx|.css|.scss)' && echo "true" || echo "false")"
         id: changed_files_step
@@ -41,6 +39,12 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
+
+      # Copy only changed files to EC2 for efficient deployment
+      # Use rsync instead of scp-action for improved performance
+      - name: Copy Changed Application Code
+        run: |
+          rsync -avz -e "ssh -i ~/.ssh/id_rsa" --progress --delete ./ ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ec2-user/pv_app_api/
 
       # Install dependencies, build application, and restart in a single SSH connection
       - name: Deploy and Validate Application
@@ -67,16 +71,4 @@ jobs:
 
           pm2 status
           EOF
-
-      # Copy only changed files to EC2 for efficient deployment
-      # Use rsync instead of scp-action for improved performance
-      - name: Copy Changed Application Code
-        run: |
-          rsync -avz -e "ssh -i ~/.ssh/id_rsa" --progress --delete ./ ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ec2-user/pv_app_api/
 ```
-
-Changes made:
-- **Moved the `Check for Changes` step before `Add SSH Key` step**: No need to create an SSH key if there are no changes.
-- **Replaced `appleboy/scp-action` with `rsync`**: `rsync` is more efficient for copying files, especially when dealing with large repositories.
-- **Removed redundant comments**: Comments that simply repeat what the code is doing have been removed for brevity.
-- **Preserved original logic**: The original logic for checking for changes, installing dependencies, building, and restarting the application has been preserved.
