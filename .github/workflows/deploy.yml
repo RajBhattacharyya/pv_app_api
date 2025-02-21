@@ -1,3 +1,5 @@
+Here's an optimized version of the provided GitHub Actions workflow. The changes aim to reduce unnecessary steps and improve overall efficiency.
+
 ```yml
 name: Deploy to AWS EC2
 
@@ -19,10 +21,12 @@ jobs:
       - name: Determine Changed Files
         run: |
           # Use git diff to find changed files, ignoring whitespace differences
-          echo "::set-output name=changed_files::$(git diff --name-only --ignore-space-at-eol HEAD~1..HEAD)"
-          # Also, store the output in variables for later use
-          echo "::set-output name=has_package_json_changed::$(git diff --name-only --ignore-space-at-eol HEAD~1..HEAD | grep -q "package.json" && echo "true" || echo "false")"
-          echo "::set-output name=has_relevant_files_changed::$(git diff --name-only --ignore-space-at-eol HEAD~1..HEAD | grep -qE '(.js|.jsx|.css|.scss)' && echo "true" || echo "false")"
+          changed_files=$(git diff --name-only --ignore-space-at-eol HEAD~1..HEAD)
+          has_package_json_changed=$(git diff --name-only --ignore-space-at-eol HEAD~1..HEAD | grep -q "package.json" && echo "true" || echo "false")
+          has_relevant_files_changed=$(git diff --name-only --ignore-space-at-eol HEAD~1..HEAD | grep -qE '(.js|.jsx|.css|.scss)' && echo "true" || echo "false")
+          echo "::set-output name=changed_files::$changed_files"
+          echo "::set-output name=has_package_json_changed::$has_package_json_changed"
+          echo "::set-output name=has_relevant_files_changed::$has_relevant_files_changed"
         id: changed_files_step
 
       # Only proceed with deployment if there are changes
@@ -40,18 +44,7 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.EC2_SSH_KEY }}
 
-      # Copy only changed files to EC2 for efficient deployment
-      # Use rsync instead of scp-action for improved performance
-      - name: Copy Changed Application Code
-        run: |
-          # Create a list of changed files to copy
-          changed_files=$(git diff --name-only --ignore-space-at-eol HEAD~1..HEAD)
-          # Use rsync to copy only changed files
-          rsync -avz --progress --delete ${changed_files} ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ec2-user/pv_app_api/
-          # Log the rsync output for visibility
-          echo "Rsync output: $?"
-
-      # Install dependencies, build application, and restart in a single SSH connection
+      # Install dependencies, build application, copy changed files, and restart in a single SSH connection
       - name: Deploy and Validate Application
         run: |
           ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
@@ -66,6 +59,9 @@ jobs:
           if [ "${{ steps.changed_files_step.outputs.has_relevant_files_changed }}" == "true" ]; then
             npm run build --if-present # only run build if script is present
           fi
+
+          # Copy only changed files
+          rsync -avz --progress --delete ${{ steps.changed_files_step.outputs.changed_files }} .
 
           # Check if the application is already running, then restart
           if pm2 status | grep -q "app.js"; then
@@ -89,28 +85,6 @@ jobs:
           # Log the HTTP status code
           echo "HTTP status code: $?"
 
-      # Set up monitoring tools
-      - name: Set Up Monitoring
-        run: |
-          ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
-          cd /home/ec2-user/pv_app_api
-          # Install monitoring tools (e.g., Prometheus, Grafana)
-          # Configure monitoring tools to track application performance and health
-          EOF
-          # Log the monitoring setup output for visibility
-          echo "Monitoring setup output: $?"
-
-      # Clean up old deployment files
-      - name: Clean Up Old Deployment Files
-        run: |
-          ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
-          cd /home/ec2-user/pv_app_api
-          # Remove old files that are no longer in the repository
-          git clean -fdx
-          EOF
-          # Log the git clean output for visibility
-          echo "Git clean output: $?"
-
       # Error handling: Fail the workflow if any step fails
       - name: Error Handling
         run: |
@@ -129,3 +103,9 @@ jobs:
             exit 1
           fi
 ```
+I made the following changes:
+1. Removed unnecessary "Copy Changed Application Code" step. Instead, "rsync" is used directly in the "Deploy and Validate Application" step.
+2. Removed the "Clean Up Old Deployment Files" step as it can be executed periodically or via a separate workflow to avoid contamination with the primary deployment workflow.
+3. Removed the "Set Up Monitoring" step as it can be setup once during initial deployment and/or executed periodically via a separate workflow.
+4. Simplified the determination of changed files and outputs.
+5. Improved code quality and formatting.
