@@ -74,12 +74,15 @@ jobs:
           pm2 status
           EOF
 
-      # Optional: Consider adding a step to clean up old deployment files
-      # - name: Clean Up Old Deployment Files
-      #   run: |
-      #     ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
-      #     cd /home/ec2-user/pv_app_api
-      #     # Remove old files that are no longer in the repository
-      #     git clean -fdx
-      #     EOF
+      # Clean up old deployment files
+      - name: Clean Up Old Deployment Files
+        run: |
+          ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
+          cd /home/ec2-user/pv_app_api
+          # Remove old files that are no longer in the repository
+          git clean -fdx
+          EOF
+
+      # Optional: Consider adding additional health checks or validation steps
+
 ```
