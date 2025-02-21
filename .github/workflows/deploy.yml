@@ -1,20 +1,26 @@
+Here's the optimized YAML with comments:
+
 ```yml
+# Define the workflow name
 name: Deploy to AWS EC2
 
+# Trigger the workflow on push events to the main branch
 on:
   push:
     branches:
       - main
 
+# Define a job to deploy to EC2
 jobs:
   deploy:
+    # Use the latest Ubuntu environment
     runs-on: ubuntu-latest
     timeouts:
-      # Add a timeout to prevent the workflow from hanging indefinitely
+      # Set a timeout to prevent the workflow from hanging indefinitely
       run: 2h
 
     steps:
-      # Checkout code
+      # Checkout the code
       - name: Checkout Code
         uses: actions/checkout@v3
 
@@ -25,116 +31,134 @@ jobs:
           changed_files=$(git diff --name-only --ignore-space-at-eol HEAD~1..HEAD)
           has_package_json_changed=$(git diff --name-only --ignore-space-at-eol HEAD~1..HEAD | grep -q "package.json" && echo "true" || echo "false")
           has_relevant_files_changed=$(git diff --name-only --ignore-space-at-eol HEAD~1..HEAD | grep -qE '(.js|.jsx|.css|.scss)|package.json' && echo "true" || echo "false")
+          # Output the results as workflow variables
           echo "::set-output name=changed_files::$changed_files"
           echo "::set-output name=has_package_json_changed::$has_package_json_changed"
           echo "::set-output name=has_relevant_files_changed::$has_relevant_files_changed"
         id: changed_files_step
 
-      # Only proceed with deployment if there are changes
+      # Check if there are changes and proceed with deployment
       - name: Check for Changes
         run: |
+          # Check if there are any changed files
           if [ "${{ steps.changed_files_step.outputs.changed_files }}" == "" ]; then
+            # If no changes, exit the workflow
             echo "No changes detected, exiting workflow"
             exit 0
           fi
+          # Otherwise, proceed with deployment
           echo "Proceeding with deployment due to changes in: ${{ steps.changed_files_step.outputs.changed_files }}"
 
-      # Add SSH key for EC2 connection
-      - name: Add SSH Key
+      # Establish an SSH connection to the EC2 instance
+      - name: Establish SSH Connection
         uses: webfactory/ssh-agent@v0.5.4
         with:
           ssh-private-key: ${{ secrets.EC2_SSH_KEY }}
 
-      # Install dependencies, build application, copy changed files, and restart in a single SSH connection
+      # Deploy and validate the application over SSH
       - name: Deploy and Validate Application
         run: |
+          # Establish SSH connection
           ssh -o "StrictHostKeyChecking=no" ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
+          # Navigate to the application directory
           cd /home/ec2-user/pv_app_api
 
-          # Only run npm install if package.json has changed or if this is the first deployment
+          # Only install dependencies if package.json has changed or if this is the first deployment
           if [ -z "$(npm ls)" ] || [ "${{ steps.changed_files_step.outputs.has_package_json_changed }}" == "true" ]; then
             # Use caching for npm install to avoid reinstalling dependencies on every workflow run
-            npm install --production --only=production --prefer-offline --cache-min 999999 # use --prefer-offline to reduce network usage
+            npm install --production --only=production --prefer-offline --cache-min 999999
           fi
 
-          # Only run npm run build if any of the relevant files have changed
+          # Only run npm run build if any relevant files have changed
           if [ "${{ steps.changed_files_step.outputs.has_relevant_files_changed }}" == "true" ]; then
             # Run npm run build with --if-present to avoid error if no build script
-            npm run build --if-present --prefix ./ & # specify the prefix to avoid unnecessary builds
+            npm run build --if-present --prefix ./ &
           fi
 
           # Wait for npm run build to complete
           wait
 
-          # Copy only changed files
+          # Copy changed files to the EC2 instance
           if [ -n "${{ steps.changed_files_step.outputs.changed_files }}" ]; then
             # Use rsync with --delete to remove deleted files and reduce data transfer
-            rsync -avz --progress --delete --compress ${{ steps.changed_files_step.outputs.changed_files }} . # add --compress to reduce data transfer
+            rsync -avz --progress --delete --compress ${{ steps.changed_files_step.outputs.changed_files }} .
           fi
 
-          # Check if the application is already running, then restart
+          # Check if the application is running and restart if necessary
           if pm2 status | grep -q "app.js"; then
             pm2 restart app.js -i 0
           else
             pm2 start app.js -i 0
           fi
 
+          # Check the application status
           pm2 status
           EOF
-          # Log the SSH connection output for visibility
-          echo "SSH connection output: $?"
+        # Log the SSH connection output for visibility
+        echo "SSH connection output: $?"
 
-      # Health check to ensure the application is running correctly
+      # Perform a health check to ensure the application is running correctly
       - name: Health Check
         run: |
+          # Establish SSH connection
           ssh -o "StrictHostKeyChecking=no" ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
+          # Navigate to the application directory
           cd /home/ec2-user/pv_app_api
-          # Implement retry logic for critical steps, such as the health check
+
+          # Implement retry logic for the health check
           for i in {1..3}; do
-            curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 http://localhost:3000/healthcheck # add a timeout to prevent hanging
+            curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 http://localhost:3000/healthcheck
             if [ $? -eq 0 ]; then
               break
             fi
             sleep 5
           done
           EOF
-          # Log the HTTP status code
-          echo "HTTP status code: $?"
+        # Log the HTTP status code
+        echo "HTTP status code: $?"
 
-      # Error handling: Fail the workflow if any step fails
+      # Handle errors and perform rollback if necessary
       - name: Error Handling
         run: |
+          # Check if the previous step failed
           if [ $? -ne 0 ]; then
+            # Log the error code
             echo "Workflow failed with error code $?"
-            # Implement automated rollback
+            # Perform automated rollback
             ssh -o "StrictHostKeyChecking=no" ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
+            # Navigate to the application directory
             cd /home/ec2-user/pv_app_api
+
             # Stop the current application instance
             pm2 stop app.js
+
             # Restore the previous application version
             git checkout HEAD~1
+
             # Restart the application
             pm2 start app.js -i 0
             EOF
+            # Fail the workflow
             exit 1
           fi
 
-      # Final check to ensure the application is running correctly after deployment
+      # Perform a final health check after deployment
       - name: Final Health Check
         run: |
+          # Establish SSH connection
           ssh -o "StrictHostKeyChecking=no" ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
+          # Navigate to the application directory
           cd /home/ec2-user/pv_app_api
-          # Implement retry logic for critical steps, such as the final health check
+
+          # Implement retry logic for the health check
           for i in {1..3}; do
-            curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 http://localhost:3000/healthcheck # add a timeout to prevent hanging
+            curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 http://localhost:3000/healthcheck
             if [ $? -eq 0 ]; then
               break
             fi
             sleep 5
           done
           EOF
-          # Log the HTTP status code
-          echo "HTTP status code: $?"
-
-# Removed unnecessary comments and steps for better readability and efficiency
+        # Log the HTTP status code
+        echo "HTTP status code: $?"
 ```
