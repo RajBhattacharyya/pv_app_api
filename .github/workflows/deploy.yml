@@ -35,21 +35,23 @@ jobs:
 
       # Add SSH key for EC2 connection
       - name: Add SSH Key
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
+        uses: webfactory/ssh-agent@v0.5.4
+        with:
+          ssh-private-key: ${{ secrets.EC2_SSH_KEY }}
 
       # Copy only changed files to EC2 for efficient deployment
       # Use rsync instead of scp-action for improved performance
       - name: Copy Changed Application Code
         run: |
-          rsync -avz -e "ssh -i ~/.ssh/id_rsa" --progress --delete ./ ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ec2-user/pv_app_api/
+          # Create a list of changed files to copy
+          changed_files=$(git diff --name-only --ignore-space-at-eol HEAD~1..HEAD)
+          # Use rsync to copy only changed files
+          rsync -avz --progress --delete ${changed_files} ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ec2-user/pv_app_api/
 
       # Install dependencies, build application, and restart in a single SSH connection
       - name: Deploy and Validate Application
         run: |
-          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
+          ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
           cd /home/ec2-user/pv_app_api
 
           # Only run npm install if package.json has changed
