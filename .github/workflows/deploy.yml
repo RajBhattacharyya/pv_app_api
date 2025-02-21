@@ -89,14 +89,21 @@ jobs:
             pm2 start app.js -i 0
           fi
 
-          # Check the application status
-          pm2 status
+          # Implement retry logic for the initial health check
+          for i in {1..3}; do
+            curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 http://localhost:3000/healthcheck
+            if [ $? -eq 0 ]; then
+              break
+            fi
+            sleep 5
+          done
+
           EOF
         # Log the SSH connection output for visibility
         echo "SSH connection output: $?"
 
-      # Perform a health check to ensure the application is running correctly
-      - name: Health Check
+      # Perform a final health check after deployment
+      - name: Final Health Check
         run: |
           # Establish SSH connection
           ssh -o "StrictHostKeyChecking=no" ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
@@ -140,23 +147,6 @@ jobs:
             exit 1
           fi
 
-      # Perform a final health check after deployment
-      - name: Final Health Check
-        run: |
-          # Establish SSH connection
-          ssh -o "StrictHostKeyChecking=no" ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
-          # Navigate to the application directory
-          cd /home/ec2-user/pv_app_api
-
-          # Implement retry logic for the health check
-          for i in {1..3}; do
-            curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 http://localhost:3000/healthcheck
-            if [ $? -eq 0 ]; then
-              break
-            fi
-            sleep 5
-          done
-          EOF
-        # Log the HTTP status code
-        echo "HTTP status code: $?"
+# Removed redundant steps to optimize the workflow
+# Removed the 'Health Check' step as it's now part of the 'Deploy and Validate Application' step
 ```
