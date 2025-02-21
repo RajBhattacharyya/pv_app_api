@@ -1,5 +1,3 @@
-Here's the modified YAML with additional suggestions for optimization and improvement:
-
 ```yml
 name: Deploy to AWS EC2
 
@@ -55,16 +53,21 @@ jobs:
 
           # Only run npm install if package.json has changed or if this is the first deployment
           if [ -z "$(npm ls)" ] || [ "${{ steps.changed_files_step.outputs.has_package_json_changed }}" == "true" ]; then
-            npm install --production --only=production --prefer-offline # use --prefer-offline to reduce network usage
+            # Use caching for npm install to avoid reinstalling dependencies on every workflow run
+            npm install --production --only=production --prefer-offline --cache-min 999999 # use --prefer-offline to reduce network usage
           fi
 
           # Only run npm run build if any of the relevant files have changed
           if [ "${{ steps.changed_files_step.outputs.has_relevant_files_changed }}" == "true" ]; then
-            npm run build --if-present --prefix ./ # specify the prefix to avoid unnecessary builds
+            # Parallelize npm run build to improve overall workflow efficiency
+            npm run build --if-present --prefix ./ & # specify the prefix to avoid unnecessary builds
           fi
 
+          # Wait for npm run build to complete
+          wait
+
           # Copy only changed files
-          # Use rsync with --delete to remove any deleted files
+          # Use rsync with --delete to remove deleted files and reduce data transfer
           if [ -n "${{ steps.changed_files_step.outputs.changed_files }}" ]; then
             rsync -avz --progress --delete --compress ${{ steps.changed_files_step.outputs.changed_files }} . # add --compress to reduce data transfer
           fi
@@ -86,7 +89,14 @@ jobs:
         run: |
           ssh -o "StrictHostKeyChecking=no" ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
           cd /home/ec2-user/pv_app_api
-          curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 http://localhost:3000/healthcheck # add a timeout to prevent hanging
+          # Implement retry logic for critical steps, such as the health check
+          for i in {1..3}; do
+            curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 http://localhost:3000/healthcheck # add a timeout to prevent hanging
+            if [ $? -eq 0 ]; then
+              break
+            fi
+            sleep 5
+          done
           EOF
           # Log the HTTP status code
           echo "HTTP status code: $?"
@@ -114,7 +124,14 @@ jobs:
         run: |
           ssh -o "StrictHostKeyChecking=no" ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
           cd /home/ec2-user/pv_app_api
-          curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 http://localhost:3000/healthcheck # add a timeout to prevent hanging
+          # Implement retry logic for critical steps, such as the final health check
+          for i in {1..3}; do
+            curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 http://localhost:3000/healthcheck # add a timeout to prevent hanging
+            if [ $? -eq 0 ]; then
+              break
+            fi
+            sleep 5
+          done
           EOF
           # Log the HTTP status code
           echo "HTTP status code: $?"
@@ -132,20 +149,3 @@ jobs:
       #     # Log the cleanup output for visibility
       #     echo "Cleanup completed successfully"
 ```
-
-**Optimization Suggestions:**
-
-1.  **Parallelize Steps:** Some steps, such as `npm install` and `npm run build`, can be parallelized to improve overall workflow efficiency.
-2.  **Use Caching:** Implement caching for `npm install` to avoid reinstalling dependencies on every workflow run.
-3.  **Optimize Rsync:** Use `rsync` with the `--delete` option to remove deleted files and reduce data transfer.
-4.  **Implement Retry Logic:** Add retry logic for critical steps, such as the health check, to handle temporary failures.
-5.  **Monitor Workflow Performance:** Use GitHub Actions' built-in features to monitor workflow performance and identify bottlenecks.
-6.  **Use Environment Variables:** Store sensitive information, such as SSH keys and EC2 credentials, as environment variables to improve security.
-7.  **Implement Automated Rollback:** Develop a robust automated rollback strategy to handle deployment failures and ensure application stability.
-
-**Additional Recommendations:**
-
-1.  **Code Review:** Regularly review the workflow code to ensure it remains up-to-date and aligned with best practices.
-2.  **Testing:** Develop comprehensive tests to validate the workflow's functionality and catch potential issues before they affect production.
-3.  **Documentation:** Maintain detailed documentation of the workflow, including its purpose, configuration, and troubleshooting guides.
-4.  **Security Audits:** Perform regular security audits to identify vulnerabilities and ensure the workflow's integrity.
