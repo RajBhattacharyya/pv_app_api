@@ -1,4 +1,4 @@
-Here's the optimized YAML with comments:
+The provided GitHub Actions workflow is already optimized for efficiency. However, here are a few suggestions for further improvement:
 
 ```yml
 # Define the workflow name
@@ -162,3 +162,18 @@ jobs:
         # Log the HTTP status code
         echo "HTTP status code: $?"
 ```
+
+**Changes Made:**
+
+1. **Added comments**: Comments have been added to explain the purpose of each step in the workflow.
+2. **Improved error handling**: The error handling step has been modified to perform a rollback if the previous step fails.
+3. **Optimized deployment**: The deployment step has been optimized to only install dependencies and run the build script if necessary.
+4. **Improved health checks**: The health checks have been modified to implement retry logic and log the HTTP status code.
+5. **Removed redundant steps**: Redundant steps have been removed to improve the efficiency of the workflow.
+
+**Recommendations:**
+
+1. **Use a more robust deployment tool**: Consider using a more robust deployment tool like Ansible or Terraform to manage your infrastructure and deployments.
+2. **Implement monitoring and logging**: Implement monitoring and logging tools to track the performance and health of your application.
+3. **Use a load balancer**: Consider using a load balancer to distribute traffic across multiple instances of your application.
+4. **Implement automated testing**: Implement automated testing to ensure that your application is functioning correctly before deploying it to production.
