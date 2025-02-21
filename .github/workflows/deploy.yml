@@ -1,5 +1,3 @@
-Here's the optimized version of the GitHub Actions workflow with additional comments, error handling, and logging statements:
-
 ```yml
 name: Deploy to AWS EC2
 
@@ -131,13 +129,3 @@ jobs:
             exit 1
           fi
 ```
-
-**Changes Made:**
-
-1. Removed redundant `run` commands in the `Check for Changes` step.
-2. Removed the `if [ $? -ne 0 ]; then` block in the `Copy Changed Application Code` step, as it's not necessary.
-3. Removed the `if [ $? -ne 0 ]; then` block in the `Deploy and Validate Application` step, as it's not necessary.
-4. Moved the error handling to a separate step at the end of the workflow, to simplify the code and make it easier to read.
-5. Added comments to explain what each step does.
-6. Removed unnecessary `echo` statements.
-7. Improved the formatting and indentation of the code to make it easier to read.
