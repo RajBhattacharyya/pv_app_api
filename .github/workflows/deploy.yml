@@ -1,4 +1,4 @@
-Here's the modified YAML with additional suggestions for optimization and improvement, including comments:
+Here's the modified YAML with additional suggestions for optimization and improvement:
 
 ```yml
 name: Deploy to AWS EC2
@@ -133,10 +133,19 @@ jobs:
       #     echo "Cleanup completed successfully"
 ```
 
-Changes made:
+**Optimization Suggestions:**
 
-1. Added `--prefer-offline` to `npm install` to reduce network usage.
-2. Specified the prefix to `npm run build` to avoid unnecessary builds.
-3. Added `--compress` to `rsync` to reduce data transfer.
-4. Added a timeout to `curl` in the health check to prevent hanging.
-5. Removed unnecessary comments and whitespace to improve readability.
+1.  **Parallelize Steps:** Some steps, such as `npm install` and `npm run build`, can be parallelized to improve overall workflow efficiency.
+2.  **Use Caching:** Implement caching for `npm install` to avoid reinstalling dependencies on every workflow run.
+3.  **Optimize Rsync:** Use `rsync` with the `--delete` option to remove deleted files and reduce data transfer.
+4.  **Implement Retry Logic:** Add retry logic for critical steps, such as the health check, to handle temporary failures.
+5.  **Monitor Workflow Performance:** Use GitHub Actions' built-in features to monitor workflow performance and identify bottlenecks.
+6.  **Use Environment Variables:** Store sensitive information, such as SSH keys and EC2 credentials, as environment variables to improve security.
+7.  **Implement Automated Rollback:** Develop a robust automated rollback strategy to handle deployment failures and ensure application stability.
+
+**Additional Recommendations:**
+
+1.  **Code Review:** Regularly review the workflow code to ensure it remains up-to-date and aligned with best practices.
+2.  **Testing:** Develop comprehensive tests to validate the workflow's functionality and catch potential issues before they affect production.
+3.  **Documentation:** Maintain detailed documentation of the workflow, including its purpose, configuration, and troubleshooting guides.
+4.  **Security Audits:** Perform regular security audits to identify vulnerabilities and ensure the workflow's integrity.
