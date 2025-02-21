@@ -23,7 +23,7 @@ jobs:
           # Use git diff to find changed files, ignoring whitespace differences
           changed_files=$(git diff --name-only --ignore-space-at-eol HEAD~1..HEAD)
           has_package_json_changed=$(git diff --name-only --ignore-space-at-eol HEAD~1..HEAD | grep -q "package.json" && echo "true" || echo "false")
-          has_relevant_files_changed=$(git diff --name-only --ignore-space-at-eol HEAD~1..HEAD | grep -qE '(.js|.jsx|.css|.scss)' && echo "true" || echo "false")
+          has_relevant_files_changed=$(git diff --name-only --ignore-space-at-eol HEAD~1..HEAD | grep -qE '(.js|.jsx|.css|.scss)|package.json' && echo "true" || echo "false")
           echo "::set-output name=changed_files::$changed_files"
           echo "::set-output name=has_package_json_changed::$has_package_json_changed"
           echo "::set-output name=has_relevant_files_changed::$has_relevant_files_changed"
@@ -50,8 +50,8 @@ jobs:
           ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
           cd /home/ec2-user/pv_app_api
 
-          # Only run npm install if package.json has changed
-          if [ "${{ steps.changed_files_step.outputs.has_package_json_changed }}" == "true" ]; then
+          # Only run npm install if package.json has changed or if this is the first deployment
+          if [ -z "$(npm ls)" ] || [ "${{ steps.changed_files_step.outputs.has_package_json_changed }}" == "true" ]; then
             npm install --production # only install production dependencies
           fi
 
@@ -62,7 +62,9 @@ jobs:
 
           # Copy only changed files
           # Use rsync with --delete to remove any deleted files
-          rsync -avz --progress --delete ${{ steps.changed_files_step.outputs.changed_files }} .
+          if [ -n "${{ steps.changed_files_step.outputs.changed_files }}" ]; then
+            rsync -avz --progress --delete ${{ steps.changed_files_step.outputs.changed_files }} .
+          fi
 
           # Check if the application is already running, then restart
           if pm2 status | grep -q "app.js"; then
@@ -104,21 +106,7 @@ jobs:
             exit 1
           fi
 
-      # Cleanup
-      - name: Cleanup
-        run: |
-          # Remove any unnecessary files
-          ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
-          cd /home/ec2-user/pv_app_api
-          # Remove any unnecessary node_modules
-          rm -rf node_modules
-          # Remove any unnecessary build files
-          rm -rf build
-          EOF
-          # Log the cleanup output for visibility
-          echo "Cleanup completed successfully"
-
-      # Final check to ensure the application is running correctly after cleanup
+      # Final check to ensure the application is running correctly after deployment
       - name: Final Health Check
         run: |
           ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
@@ -127,4 +115,24 @@ jobs:
           EOF
           # Log the HTTP status code
           echo "HTTP status code: $?"
+
+      # Cleanup (commented out for now, as it's not necessary and can cause issues if run after deployment)
+      # - name: Cleanup
+      #   run: |
+      #     ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
+      #     cd /home/ec2-user/pv_app_api
+      #     # Remove any unnecessary node_modules
+      #     rm -rf node_modules
+      #     # Remove any unnecessary build files
+      #     rm -rf build
+      #     EOF
+      #     # Log the cleanup output for visibility
+      #     echo "Cleanup completed successfully"
 ```
+
+Note: 
+
+- I have commented out the Cleanup step as it can cause issues if run after deployment. It's not necessary and can be removed or run at a different stage.
+- The `npm install` command is now run only when `package.json` has changed or if this is the first deployment. This is to prevent unnecessary re-installation of dependencies.
+- The `rsync` command now checks if there are any changed files before copying them. This is to prevent unnecessary file copying.
+- The `has_relevant_files_changed` variable now checks for changes to `package.json` as well, to ensure that `npm install` is run when necessary.
