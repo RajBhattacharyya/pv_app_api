@@ -1,4 +1,4 @@
-Here's the optimized YAML with comments:
+Here is the modified YAML with additional comments, error handling, and logging statements:
 
 ```yml
 name: Deploy to AWS EC2
@@ -49,6 +49,11 @@ jobs:
           changed_files=$(git diff --name-only --ignore-space-at-eol HEAD~1..HEAD)
           # Use rsync to copy only changed files
           rsync -avz --progress --delete ${changed_files} ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ec2-user/pv_app_api/
+        # Error handling: Fail the workflow if rsync fails
+        if [ $? -ne 0 ]; then
+          echo "Failed to copy files to EC2"
+          exit 1
+        fi
 
       # Install dependencies, build application, and restart in a single SSH connection
       - name: Deploy and Validate Application
@@ -75,6 +80,11 @@ jobs:
 
           pm2 status
           EOF
+        # Error handling: Fail the workflow if any command in the SSH connection fails
+        if [ $? -ne 0 ]; then
+          echo "Failed to deploy and validate application"
+          exit 1
+        fi
 
       # Clean up old deployment files
       - name: Clean Up Old Deployment Files
@@ -84,6 +94,11 @@ jobs:
           # Remove old files that are no longer in the repository
           git clean -fdx
           EOF
+        # Error handling: Fail the workflow if git clean fails
+        if [ $? -ne 0 ]; then
+          echo "Failed to clean up old deployment files"
+          exit 1
+        fi
 
       # Health check to ensure the application is running correctly
       - name: Health Check
@@ -92,32 +107,18 @@ jobs:
           cd /home/ec2-user/pv_app_api
           curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/healthcheck
           EOF
+          # Log the HTTP status code
+          echo "HTTP status code: $?"
         # Fail the workflow if the health check fails
-        if [ $? -ne 200 ]; then # Changed to 200 for a more specific HTTP status code
+        if [ $? -ne 200 ]; then
+          echo "Health check failed with status code $?"
           exit 1
         fi
 ```
 
-**Changes Made:**
+Additional recommendations:
 
-1.  **Optimized the Health Check Step:** Changed the condition in the health check step to fail the workflow only if the HTTP status code is not 200. This is a more specific condition and will help in identifying issues with the application.
-
-2.  **No Redundant Steps:** The provided workflow does not have any redundant steps. Each step is necessary for the deployment process.
-
-3.  **Efficient Deployment:** The workflow already uses rsync to copy only changed files, which is an efficient approach.
-
-4.  **Single SSH Connection:** The workflow uses a single SSH connection for multiple tasks, which reduces the overhead of establishing multiple connections.
-
-5.  **Conditional Execution:** The workflow uses conditional statements to execute tasks only when necessary, which helps in optimizing the deployment process.
-
-**Recommendations:**
-
-1.  **Error Handling:** Implement error handling for each step to ensure that the workflow fails if any step encounters an error.
-
-2.  **Logging:** Add logging statements to each step to provide more visibility into the deployment process.
-
-3.  **Security:** Ensure that sensitive information, such as the EC2 SSH key, is stored securely using GitHub secrets.
-
-4.  **Monitoring:** Set up monitoring tools to track the performance and health of the application after deployment.
-
-5.  **Automated Rollbacks:** Consider implementing automated rollbacks in case the deployment fails or the application becomes unhealthy after deployment.
+* Consider adding more detailed logging statements throughout the workflow to provide better visibility into the deployment process.
+* Implement automated rollbacks in case the deployment fails or the application becomes unhealthy after deployment.
+* Set up monitoring tools to track the performance and health of the application after deployment.
+* Ensure that sensitive information, such as the EC2 SSH key, is stored securely using GitHub secrets.
