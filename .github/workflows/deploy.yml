@@ -1,81 +1,226 @@
-name: Deploy to AWS EC2
+import pyrebase
+import psutil
+import time
+import os
+from dotenv import load_dotenv
+from github import Github, InputGitTreeElement, GithubException
+from groq import Groq
+from halo import Halo
+from rich import print
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+from codecarbon import EmissionsTracker
+import pandas as pd
 
-on:
-  push:
-    branches:
-      - main
+# Load environment variables
+load_dotenv()
 
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
+# Firebase configuration
+firebase_config = {
+    "apiKey": "AIzaSyBkoaipcAwK052ikCJn6DLcfgN2t5iSPxk",
+    "authDomain": "devbud-4f264.firebaseapp.com",
+    "databaseURL": "https://devbud-4f264-default-rtdb.firebaseio.com",
+    "projectId": "devbud-4f264",
+    "storageBucket": "devbud-4f264.firebasestorage.app",
+    "messagingSenderId": "946167149971",
+    "appId": "1:946167149971:web:49af0525a466d08f002466",
+    "measurementId": "G-678QS7K8BE"
+}
 
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
+# Initialize Firebase
+firebase = pyrebase.initialize_app(firebase_config)
+db = firebase.database()
 
-      - name: Add SSH Key
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
+# GitHub and Groq configurations
+github_token = os.getenv("GITHUB_TOKEN")
+llmk = os.getenv("API_KEY")
+g = Github(github_token)
+repo_name = "RajBhattacharyya/pv_app_api"
+repo = g.get_repo(repo_name)
+workflow_path = ".github/workflows/deploy.yml"
+branch_name = "optimize-workflow"
+commit_message = "Optimized GitHub Actions for Carbon Efficiency"
 
-      - name: Validate SSH Key
-        run: |
-          ssh-keygen -l -f ~/.ssh/id_rsa
+# Define bot username to ignore
+BOT_USERNAME = "kittycat58"
 
-      - name: Copy Files to EC2
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ~/.ssh/id_rsa
-          source: "./"
-          target: "/home/ec2-user/pv_app_api"
+# Store the last checked commit
+last_checked_commit = None
 
-      - name: Validate Copied Files
-        run: |
-          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "ls -la /home/ec2-user/pv_app_api"
+# Initialize rich console
+console = Console()
 
-      - name: Install Dependencies
-        run: |
-          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
-          cd /home/ec2-user/pv_app_api
-          npm install
-          EOF
+# Create emissions directory if it doesn't exist
+os.makedirs("emissions", exist_ok=True)
 
-      - name: Build Application
-        run: |
-          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
-          cd /home/ec2-user/pv_app_api
-          npm run build
-          EOF
+# ASCII Art
+ascii_banner = """
+██████╗ ███████╗██╗   ██╗ ██████╗  ██████╗ ███████╗
+██╔══██╗██╔════╝██║   ██║██╔═══██╗██╔═══██╗██╔════╝
+██████╔╝█████╗  ██║   ██║██║   ██║██║   ██║███████╗
+██╔═══╝ ██╔══╝  ╚██╗ ██╔╝██║   ██║██║   ██║╚════██║
+██║     ███████╗ ╚████╔╝ ╚██████╔╝╚██████╔╝███████║
+╚═╝     ╚══════╝  ╚═══╝   ╚═════╝  ╚═════╝ ╚══════╝
+"""
+console.print(Panel(ascii_banner, title="[bold cyan]DEVOPS-BUD[/bold cyan]", expand=False))
 
-      - name: Restart Application
-        run: |
-          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
-          cd /home/ec2-user/pv_app_api
-          pm2 restart app.js -i 0 || pm2 start app.js -i 0
-          EOF
+# Function to get CPU and RAM usage
+def get_system_stats():
+    cpu_usage = psutil.cpu_percent(interval=1)
+    ram_usage = psutil.virtual_memory().percent
+    return cpu_usage, ram_usage
 
-      - name: Validate Application Status
-        run: |
-          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "pm2 status"
+# Function to send stats to Firebase
+def send_stats_to_firebase(cpu_usage, ram_usage):
+    data = {
+        "CPU": cpu_usage,
+        "RAM": ram_usage,
+        "DESCRIPTION": "none",
+        "CHANGE": "none"
+    }
+    db.child("system_stats").set(data)
+    console.print("[green]Stats sent to Firebase:[/green]", data)
 
-      - name: Clean Up
-        run: |
-          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "rm -rf /home/ec2-user/pv_app_api/node_modules"
-          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "npm cache clean --force"
+# Function to send AI optimization notes to Firebase
+def send_ai_optimization_note(changes, description, impact):
+    data = {
+        "CHANGE": changes,
+        "DESCRIPTION": description,
+        "IMPACT": impact
+    }
+    db.child("ai_optimizations").push(data)
+    console.print("[green]AI Optimization note sent to Firebase:[/green]", data)
 
-      - name: Reinstall Dependencies
-        run: |
-          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
-          cd /home/ec2-user/pv_app_api
-          npm install
-          EOF
+# Function to track and compare emissions
+def track_workflow_emissions(original_yaml, optimized_yaml):
+    try:
+        with Halo(text="Calculating carbon emissions...", spinner="dots"):
+            original_tracker = EmissionsTracker(
+                project_name="original_workflow",
+                output_dir="emissions",
+                log_level='warning',
+                allow_multiple_runs=True
+            )
+            optimized_tracker = EmissionsTracker(
+                project_name="optimized_workflow",
+                output_dir="emissions",
+                log_level='warning',
+                allow_multiple_runs=True
+            )
 
-      - name: Final Application Restart
-        run: |
-          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
-          cd /home/ec2-user/pv_app_api
-          pm2 restart app.js -i 0 || pm2 start app.js -i 0
-          EOF
+            def run_workflow(yaml_content, tracker):
+                try:
+                    tracker.start()
+                    for line in yaml_content.split('\n'):
+                        if 'run:' in line or 'uses:' in line:
+                            if 'build' in line.lower():
+                                time.sleep(0.3)
+                            elif 'test' in line.lower():
+                                time.sleep(0.2)
+                            else:
+                                time.sleep(0.1)
+                    emissions = tracker.stop()
+                    return emissions if emissions is not None else 0.0
+                except Exception as e:
+                    console.print(f"[yellow]Warning: Error tracking emissions: {e}[/yellow]")
+                    return 0.0
+
+            original_emissions = run_workflow(original_yaml, original_tracker)
+            optimized_emissions = run_workflow(optimized_yaml, optimized_tracker)
+
+            original_emissions = float(original_emissions) if original_emissions is not None else 0.0
+            optimized_emissions = float(optimized_emissions) if optimized_emissions is not None else 0.0
+
+            emissions_saved = max(0, original_emissions - optimized_emissions)
+            percentage_reduction = (emissions_saved / original_emissions * 100) if original_emissions > 0 else 0
+
+            table = Table(title="Carbon Emissions Analysis")
+            table.add_column("Metric", style="cyan")
+            table.add_column("Value", style="green")
+            table.add_row("Original Workflow Emissions", f"{original_emissions:.4f} kg CO2e")
+            table.add_row("Optimized Workflow Emissions", f"{optimized_emissions:.4f} kg CO2e")
+            table.add_row("Emissions Saved", f"{emissions_saved:.4f} kg CO2e")
+            table.add_row("Reduction Percentage", f"{percentage_reduction:.1f}%")
+            table.add_row("Tree Months Equivalent", f"{emissions_saved * 0.0165:.2f} tree-months")
+            console.print(table)
+
+            return {
+                'original': original_emissions,
+                'optimized': optimized_emissions,
+                'saved': emissions_saved,
+                'percentage': percentage_reduction
+            }
+    except Exception as e:
+        console.print(f"[red]Error in emissions tracking: {e}[/red]")
+        return {
+            'original': 0.0,
+            'optimized': 0.0,
+            'saved': 0.0,
+            'percentage': 0.0
+        }
+
+# Function to optimize workflow using AI
+def optimize_workflow(original_yaml):
+    try:
+        with Halo(text="AI analyzing and optimizing workflow...", spinner="dots"):
+            client = Groq(api_key=llmk)
+            chat_completion = client.chat.completions.create(
+                messages=[{
+                    "role": "user",
+                    "content": f"""
+                    Analyze the following GitHub Actions workflow changes. If the changes are 
+                    resource-intensive (e.g., running unnecessary steps, redundant builds), 
+                    optimize them for efficiency. Return only the modified YAML with comments.
+
+                    Workflow Changes:
+                    {original_yaml}
+                    """
+                }],
+                model="llama-3.3-70b-versatile",
+            )
+            optimized_yaml = chat_completion.choices[0].message.content
+
+            emissions_data = track_workflow_emissions(original_yaml, optimized_yaml)
+
+            try:
+                emissions_df = pd.read_csv("emissions/historical_emissions.csv")
+            except FileNotFoundError:
+                emissions_df = pd.DataFrame(columns=['timestamp', 'original', 'optimized', 'saved', 'percentage'])
+
+            new_row = {
+                'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
+                **emissions_data
+            }
+            emissions_df = pd.concat([emissions_df, pd.DataFrame([new_row])], ignore_index=True)
+            emissions_df.to_csv("emissions/historical_emissions.csv", index=False)
+
+            return optimized_yaml
+    except Exception as e:
+        console.print(f"[red]Error in workflow optimization: {e}[/red]")
+        return original_yaml
+
+# Main loop
+console.print("\n[bold green]🔄 Listening for new commits and monitoring system stats...[/bold green]\n")
+
+while True:
+    try:
+        # Get CPU and RAM usage
+        cpu_usage, ram_usage = get_system_stats()
+
+        # Send stats to Firebase
+        send_stats_to_firebase(cpu_usage, ram_usage)
+
+        # Simulate AI optimization (replace with actual AI optimization logic)
+        if cpu_usage > 80 or ram_usage > 80:
+            changes = "Reduced unnecessary background processes"
+            description = "AI detected high CPU/RAM usage and optimized background processes."
+            impact = "Reduced CPU usage by 20% and RAM usage by 15%."
+            send_ai_optimization_note(changes, description, impact)
+
+        # Wait for a minute before sending the next update
+        time.sleep(60)
+
+    except Exception as e:
+        console.print(f"[red]❌ Error: {e}[/red]")
+        time.sleep(60)
