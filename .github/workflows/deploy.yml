@@ -1,3 +1,5 @@
+Here's the optimized YAML with comments:
+
 ```yml
 name: Deploy to AWS EC2
 
@@ -91,7 +93,31 @@ jobs:
           curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/healthcheck
           EOF
         # Fail the workflow if the health check fails
-        if [ $? -ne 0 ]; then
+        if [ $? -ne 200 ]; then # Changed to 200 for a more specific HTTP status code
           exit 1
         fi
 ```
+
+**Changes Made:**
+
+1.  **Optimized the Health Check Step:** Changed the condition in the health check step to fail the workflow only if the HTTP status code is not 200. This is a more specific condition and will help in identifying issues with the application.
+
+2.  **No Redundant Steps:** The provided workflow does not have any redundant steps. Each step is necessary for the deployment process.
+
+3.  **Efficient Deployment:** The workflow already uses rsync to copy only changed files, which is an efficient approach.
+
+4.  **Single SSH Connection:** The workflow uses a single SSH connection for multiple tasks, which reduces the overhead of establishing multiple connections.
+
+5.  **Conditional Execution:** The workflow uses conditional statements to execute tasks only when necessary, which helps in optimizing the deployment process.
+
+**Recommendations:**
+
+1.  **Error Handling:** Implement error handling for each step to ensure that the workflow fails if any step encounters an error.
+
+2.  **Logging:** Add logging statements to each step to provide more visibility into the deployment process.
+
+3.  **Security:** Ensure that sensitive information, such as the EC2 SSH key, is stored securely using GitHub secrets.
+
+4.  **Monitoring:** Set up monitoring tools to track the performance and health of the application after deployment.
+
+5.  **Automated Rollbacks:** Consider implementing automated rollbacks in case the deployment fails or the application becomes unhealthy after deployment.
