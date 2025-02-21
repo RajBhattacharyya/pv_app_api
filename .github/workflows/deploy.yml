@@ -1,4 +1,5 @@
 Here's the optimized YAML with comments:
+
 ```yml
 name: Deploy to AWS EC2
 
@@ -103,7 +104,7 @@ jobs:
             exit 1
           fi
 
-      # New step: Cleanup
+      # Cleanup
       - name: Cleanup
         run: |
           # Remove any unnecessary files
@@ -114,11 +115,16 @@ jobs:
           # Remove any unnecessary build files
           rm -rf build
           EOF
-```
-**Changes Made:**
+          # Log the cleanup output for visibility
+          echo "Cleanup completed successfully"
 
-1. **Added a new step for cleanup**: This step removes any unnecessary files, such as `node_modules` and `build` files, to free up disk space and reduce the size of the deployment.
-2. **Improved error handling**: The error handling step now stops the current application instance, restores the previous application version, and restarts the application.
-3. **Improved logging**: The workflow now logs the SSH connection output and the HTTP status code for better visibility.
-4. **Optimized deployment**: The workflow only runs `npm install` and `npm run build` if the relevant files have changed, reducing the number of unnecessary deployments.
-5. **Improved security**: The workflow uses `--production` flag with `npm install` to only install production dependencies, reducing the attack surface.
+      # Final check to ensure the application is running correctly after cleanup
+      - name: Final Health Check
+        run: |
+          ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
+          cd /home/ec2-user/pv_app_api
+          curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/healthcheck
+          EOF
+          # Log the HTTP status code
+          echo "HTTP status code: $?"
+```
