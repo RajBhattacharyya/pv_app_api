@@ -1,4 +1,3 @@
-Here's the optimized YAML with comments:
 ```yml
 name: Deploy to AWS EC2
 
@@ -84,28 +83,15 @@ jobs:
           git clean -fdx
           EOF
 
-      # Optional: Consider adding additional health checks or validation steps
-      # Example: Add a health check to ensure the application is running correctly
-      # - name: Health Check
-      #   run: |
-      #     ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
-      #     cd /home/ec2-user/pv_app_api
-      #     curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/healthcheck
-      #     EOF
-      #   # Fail the workflow if the health check fails
-      #   if [ $? -ne 0 ]; then
-      #     exit 1
-      #   fi
+      # Health check to ensure the application is running correctly
+      - name: Health Check
+        run: |
+          ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
+          cd /home/ec2-user/pv_app_api
+          curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/healthcheck
+          EOF
+        # Fail the workflow if the health check fails
+        if [ $? -ne 0 ]; then
+          exit 1
+        fi
 ```
-**Changes Made:**
-
-1. **No unnecessary changes**: The original workflow was already optimized for efficiency, with checks for changes before proceeding with deployment.
-2. **Added a comment for a potential health check**: This is an optional step that can be added to ensure the application is running correctly after deployment.
-3. **No redundant builds or runs**: The workflow only runs `npm install` and `npm run build` when necessary, based on the changes detected.
-4. **Single SSH connection**: The workflow uses a single SSH connection to perform multiple tasks, reducing the overhead of establishing multiple connections.
-
-**Recommendations:**
-
-1. **Consider adding a health check**: This can help ensure the application is running correctly after deployment.
-2. **Monitor the workflow**: Keep an eye on the workflow's performance and adjust as needed to optimize efficiency.
-3. **Use a more robust deployment tool**: Depending on the complexity of the application, a more robust deployment tool like Ansible or Terraform may be necessary.
