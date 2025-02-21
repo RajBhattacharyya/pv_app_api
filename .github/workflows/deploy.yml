@@ -59,7 +59,7 @@ jobs:
 
           # Only run npm run build if any of the relevant files have changed
           if [ "${{ steps.changed_files_step.outputs.has_relevant_files_changed }}" == "true" ]; then
-            # Parallelize npm run build to improve overall workflow efficiency
+            # Run npm run build with --if-present to avoid error if no build script
             npm run build --if-present --prefix ./ & # specify the prefix to avoid unnecessary builds
           fi
 
@@ -67,8 +67,8 @@ jobs:
           wait
 
           # Copy only changed files
-          # Use rsync with --delete to remove deleted files and reduce data transfer
           if [ -n "${{ steps.changed_files_step.outputs.changed_files }}" ]; then
+            # Use rsync with --delete to remove deleted files and reduce data transfer
             rsync -avz --progress --delete --compress ${{ steps.changed_files_step.outputs.changed_files }} . # add --compress to reduce data transfer
           fi
 
@@ -136,16 +136,5 @@ jobs:
           # Log the HTTP status code
           echo "HTTP status code: $?"
 
-      # Optional: Cleanup (commented out for now, as it's not necessary and can cause issues if run after deployment)
-      # - name: Cleanup
-      #   run: |
-      #     ssh -o "StrictHostKeyChecking=no" ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
-      #     cd /home/ec2-user/pv_app_api
-      #     # Remove any unnecessary node_modules
-      #     rm -rf node_modules
-      #     # Remove any unnecessary build files
-      #     rm -rf build
-      #     EOF
-      #     # Log the cleanup output for visibility
-      #     echo "Cleanup completed successfully"
+# Removed unnecessary comments and steps for better readability and efficiency
 ```
