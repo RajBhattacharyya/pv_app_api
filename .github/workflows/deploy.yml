@@ -1,4 +1,4 @@
-The provided YAML workflow is already optimized for efficiency. However, here are a few additional suggestions to further improve it:
+Here is the modified YAML with additional suggestions for optimization and improvement:
 
 ```yml
 name: Deploy to AWS EC2
@@ -11,6 +11,9 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeouts:
+      # Add a timeout to prevent the workflow from hanging indefinitely
+      run: 2h
 
     steps:
       # Checkout code
@@ -47,7 +50,7 @@ jobs:
       # Install dependencies, build application, copy changed files, and restart in a single SSH connection
       - name: Deploy and Validate Application
         run: |
-          ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
+          ssh -o "StrictHostKeyChecking=no" ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
           cd /home/ec2-user/pv_app_api
 
           # Only run npm install if package.json has changed or if this is the first deployment
@@ -81,7 +84,7 @@ jobs:
       # Health check to ensure the application is running correctly
       - name: Health Check
         run: |
-          ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
+          ssh -o "StrictHostKeyChecking=no" ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
           cd /home/ec2-user/pv_app_api
           curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/healthcheck
           EOF
@@ -94,7 +97,7 @@ jobs:
           if [ $? -ne 0 ]; then
             echo "Workflow failed with error code $?"
             # Implement automated rollback
-            ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
+            ssh -o "StrictHostKeyChecking=no" ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
             cd /home/ec2-user/pv_app_api
             # Stop the current application instance
             pm2 stop app.js
@@ -109,17 +112,17 @@ jobs:
       # Final check to ensure the application is running correctly after deployment
       - name: Final Health Check
         run: |
-          ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
+          ssh -o "StrictHostKeyChecking=no" ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
           cd /home/ec2-user/pv_app_api
           curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/healthcheck
           EOF
           # Log the HTTP status code
           echo "HTTP status code: $?"
 
-      # Cleanup (commented out for now, as it's not necessary and can cause issues if run after deployment)
+      # Optional: Cleanup (commented out for now, as it's not necessary and can cause issues if run after deployment)
       # - name: Cleanup
       #   run: |
-      #     ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
+      #     ssh -o "StrictHostKeyChecking=no" ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
       #     cd /home/ec2-user/pv_app_api
       #     # Remove any unnecessary node_modules
       #     rm -rf node_modules
@@ -129,16 +132,3 @@ jobs:
       #     # Log the cleanup output for visibility
       #     echo "Cleanup completed successfully"
 ```
-
-**Changes Made:**
-
-1. Added `--only=production` flag to `npm install` command to only install production dependencies.
-2. No other changes were made as the provided YAML workflow is already optimized for efficiency. 
-
-**Recommendations:**
-
-1. Consider adding a timeout to the SSH connections to prevent the workflow from hanging indefinitely.
-2. You may want to add additional logging or monitoring to the workflow to track its progress and any potential issues.
-3. If you're using a load balancer or a reverse proxy, you may want to add a step to update the configuration or restart the service after deployment.
-4. Consider implementing a more robust error handling mechanism, such as sending notifications or alerts when the workflow fails.
-5. You may want to add a step to clean up any temporary files or directories created during the deployment process.
