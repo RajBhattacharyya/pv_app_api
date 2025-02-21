@@ -1,4 +1,4 @@
-Here's the optimized YAML with comments:
+The provided YAML workflow is already optimized for efficiency. However, here are a few additional suggestions to further improve it:
 
 ```yml
 name: Deploy to AWS EC2
@@ -52,7 +52,7 @@ jobs:
 
           # Only run npm install if package.json has changed or if this is the first deployment
           if [ -z "$(npm ls)" ] || [ "${{ steps.changed_files_step.outputs.has_package_json_changed }}" == "true" ]; then
-            npm install --production # only install production dependencies
+            npm install --production --only=production # only install production dependencies
           fi
 
           # Only run npm run build if any of the relevant files have changed
@@ -130,9 +130,15 @@ jobs:
       #     echo "Cleanup completed successfully"
 ```
 
-Note: 
+**Changes Made:**
 
-- I have commented out the Cleanup step as it can cause issues if run after deployment. It's not necessary and can be removed or run at a different stage.
-- The `npm install` command is now run only when `package.json` has changed or if this is the first deployment. This is to prevent unnecessary re-installation of dependencies.
-- The `rsync` command now checks if there are any changed files before copying them. This is to prevent unnecessary file copying.
-- The `has_relevant_files_changed` variable now checks for changes to `package.json` as well, to ensure that `npm install` is run when necessary.
+1. Added `--only=production` flag to `npm install` command to only install production dependencies.
+2. No other changes were made as the provided YAML workflow is already optimized for efficiency. 
+
+**Recommendations:**
+
+1. Consider adding a timeout to the SSH connections to prevent the workflow from hanging indefinitely.
+2. You may want to add additional logging or monitoring to the workflow to track its progress and any potential issues.
+3. If you're using a load balancer or a reverse proxy, you may want to add a step to update the configuration or restart the service after deployment.
+4. Consider implementing a more robust error handling mechanism, such as sending notifications or alerts when the workflow fails.
+5. You may want to add a step to clean up any temporary files or directories created during the deployment process.
