@@ -26,14 +26,14 @@ jobs:
           # Change permissions of the SSH key
           chmod 600 ~/.ssh/id_rsa
 
-      # Copy files to EC2 using SSH
+      # Copy files to EC2 using SSH and remove unnecessary files
       - name: Copy Files to EC2
         run: |
-          # Copy files to EC2 using SSH
-          rsync -avz -e "ssh -i ~/.ssh/id_rsa" ./ ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ec2-user/pv_app_api/
+          # Copy files to EC2 using SSH and exclude node_modules and build directories
+          rsync -avz --exclude node_modules --exclude build -e "ssh -i ~/.ssh/id_rsa" ./ ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ec2-user/pv_app_api/
 
-      # Install dependencies and build application on EC2 if necessary
-      - name: Install and Build Application
+      # Install dependencies, build application, and restart on EC2 in a single SSH session
+      - name: Install, Build, and Restart Application
         run: |
           # SSH into EC2 instance
           ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
@@ -44,22 +44,12 @@ jobs:
             npm install
             npm run build
           fi
-          EOF
-
-      # Restart application on EC2
-      - name: Restart Application
-        run: |
-          # SSH into EC2 instance and restart application
-          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
-          # Navigate to application directory
-          cd /home/ec2-user/pv_app_api
           # Restart application
           pm2 restart app.js -i 0 || pm2 start app.js -i 0
+          # Check application status
+          pm2 status
           EOF
 
-      # Validate application status
-      - name: Validate Application Status
-        run: |
-          # SSH into EC2 instance and check application status
-          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "pm2 status"
+      # Removed redundant steps to improve efficiency
+      # The above step now handles installation, building, restarting, and validation in a single SSH session
 ```
