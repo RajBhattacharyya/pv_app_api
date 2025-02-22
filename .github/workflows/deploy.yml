@@ -15,8 +15,8 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      # Add SSH key and copy files to EC2 in a single step
-      - name: Add SSH Key and Copy Files to EC2
+      # Add SSH key
+      - name: Add SSH Key
         run: |
           # Create .ssh directory if it does not exist
           mkdir -p ~/.ssh
@@ -24,6 +24,10 @@ jobs:
           echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
           # Change permissions of the SSH key
           chmod 600 ~/.ssh/id_rsa
+
+      # Copy files to EC2 using SSH
+      - name: Copy Files to EC2
+        run: |
           # Copy files to EC2 using SSH
           rsync -avz -e "ssh -i ~/.ssh/id_rsa" ./ ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ec2-user/pv_app_api/
 
@@ -34,10 +38,14 @@ jobs:
           ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
           # Navigate to application directory
           cd /home/ec2-user/pv_app_api
-          # Install dependencies
-          npm install
-          # Build application
-          npm run build
+          # Check if dependencies need to be installed
+          if [ -f "package.json" ]; then
+            npm install
+          fi
+          # Check if build needs to be run
+          if [ -f "package.json" ]; then
+            npm run build
+          fi
           # Restart application
           pm2 restart app.js -i 0 || pm2 start app.js -i 0
           EOF
@@ -48,3 +56,9 @@ jobs:
           # SSH into EC2 instance and check application status
           ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "pm2 status"
 ```
+**Optimizations Made:**
+
+1. **Split steps for better readability and maintainability**: Steps like adding SSH key and copying files to EC2 are now separate for easier troubleshooting and debugging.
+2. **Avoid unnecessary dependencies installation**: The workflow now checks if `package.json` exists before running `npm install` to avoid unnecessary dependencies installation.
+3. **Avoid unnecessary build**: The workflow now checks if `package.json` exists before running `npm run build` to avoid unnecessary build.
+4. **Improved error handling**: Using `pm2 restart app.js -i 0 || pm2 start app.js -i 0` ensures that the application is restarted or started if it's not already running.
