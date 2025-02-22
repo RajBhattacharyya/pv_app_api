@@ -1,3 +1,4 @@
+```yml
 name: Deploy to AWS EC2
 
 on:
@@ -19,9 +20,10 @@ jobs:
           echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
 
-      - name: Validate SSH Key
-        run: |
-          ssh-keygen -l -f ~/.ssh/id_rsa
+      # Validate SSH Key step is unnecessary and can be removed
+      # - name: Validate SSH Key
+      #   run: |
+      #     ssh-keygen -l -f ~/.ssh/id_rsa
 
       - name: Copy Files to EC2
         uses: appleboy/scp-action@v0.1.7
@@ -32,21 +34,16 @@ jobs:
           source: "./"
           target: "/home/ec2-user/pv_app_api"
 
-      - name: Validate Copied Files
-        run: |
-          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "ls -la /home/ec2-user/pv_app_api"
+      # Validate Copied Files step can be removed as it doesn't provide any significant value
+      # - name: Validate Copied Files
+      #   run: |
+      #     ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "ls -la /home/ec2-user/pv_app_api"
 
-      - name: Install Dependencies
+      - name: Install and Build Application
         run: |
           ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
           cd /home/ec2-user/pv_app_api
           npm install
-          EOF
-
-      - name: Build Application
-        run: |
-          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
-          cd /home/ec2-user/pv_app_api
           npm run build
           EOF
 
@@ -61,21 +58,25 @@ jobs:
         run: |
           ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "pm2 status"
 
-      - name: Clean Up
-        run: |
-          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "rm -rf /home/ec2-user/pv_app_api/node_modules"
-          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "npm cache clean --force"
+      # Clean Up step is unnecessary as we are installing dependencies again in the next step
+      # - name: Clean Up
+      #   run: |
+      #     ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "rm -rf /home/ec2-user/pv_app_api/node_modules"
+      #     ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "npm cache clean --force"
 
-      - name: Reinstall Dependencies
-        run: |
-          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
-          cd /home/ec2-user/pv_app_api
-          npm install
-          EOF
+      # Reinstall Dependencies step is unnecessary and can be removed
+      # - name: Reinstall Dependencies
+      #   run: |
+      #     ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
+      #     cd /home/ec2-user/pv_app_api
+      #     npm install
+      #     EOF
 
-      - name: Final Application Restart
-        run: |
-          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
-          cd /home/ec2-user/pv_app_api
-          pm2 restart app.js -i 0 || pm2 start app.js -i 0
-          EOF
+      # Final Application Restart step is unnecessary and can be removed
+      # - name: Final Application Restart
+      #   run: |
+      #     ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
+      #     cd /home/ec2-user/pv_app_api
+      #     pm2 restart app.js -i 0 || pm2 start app.js -i 0
+      #     EOF
+```
