@@ -11,46 +11,40 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Checkout code and add SSH key
+      # Checkout code
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      - name: Add SSH Key
+      # Add SSH key and copy files to EC2 in a single step
+      - name: Add SSH Key and Copy Files to EC2
         run: |
+          # Create .ssh directory if it does not exist
           mkdir -p ~/.ssh
+          # Add SSH key
           echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
+          # Change permissions of the SSH key
           chmod 600 ~/.ssh/id_rsa
-
-      # Copy files to EC2
-      - name: Copy Files to EC2
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ~/.ssh/id_rsa
-          source: "./"
-          target: "/home/ec2-user/pv_app_api"
+          # Copy files to EC2 using SSH
+          rsync -avz -e "ssh -i ~/.ssh/id_rsa" ./ ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ec2-user/pv_app_api/
 
       # Install dependencies, build application, and restart application on EC2
       - name: Install and Restart Application
         run: |
+          # SSH into EC2 instance
           ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
+          # Navigate to application directory
           cd /home/ec2-user/pv_app_api
+          # Install dependencies
           npm install
+          # Build application
           npm run build
+          # Restart application
           pm2 restart app.js -i 0 || pm2 start app.js -i 0
           EOF
 
       # Validate application status
       - name: Validate Application Status
         run: |
+          # SSH into EC2 instance and check application status
           ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "pm2 status"
-
-      # Remove redundant steps to improve efficiency
-      # The steps below have been optimized:
-      # - Validate SSH Key: Not necessary as the SSH key is validated implicitly during the file copy process
-      # - Validate Copied Files: Not necessary as the file copy process will fail if the files are not copied correctly
-      # - Clean Up: Not necessary as the application should be designed to handle its own cleanup
-      # - Reinstall Dependencies and Final Application Restart: Not necessary as they are redundant with the previous steps
-
 ```
