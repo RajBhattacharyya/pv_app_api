@@ -1,3 +1,4 @@
+```yml
 name: Deploy to AWS EC2
 
 on:
@@ -10,19 +11,19 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # Checkout code
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      - name: Add SSH Key
+      # Add and validate SSH key
+      - name: Add and Validate SSH Key
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-
-      - name: Validate SSH Key
-        run: |
           ssh-keygen -l -f ~/.ssh/id_rsa
 
+      # Copy files to EC2
       - name: Copy Files to EC2
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -32,24 +33,16 @@ jobs:
           source: "./"
           target: "/home/ec2-user/pv_app_api"
 
-      - name: Validate Copied Files
-        run: |
-          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "ls -la /home/ec2-user/pv_app_api"
-
-      - name: Install Dependencies
+      # Install and build application
+      - name: Install and Build Application
         run: |
           ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
           cd /home/ec2-user/pv_app_api
           npm install
-          EOF
-
-      - name: Build Application
-        run: |
-          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
-          cd /home/ec2-user/pv_app_api
           npm run build
           EOF
 
+      # Restart application
       - name: Restart Application
         run: |
           ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
@@ -57,25 +50,17 @@ jobs:
           pm2 restart app.js -i 0 || pm2 start app.js -i 0
           EOF
 
+      # Validate application status
       - name: Validate Application Status
         run: |
           ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "pm2 status"
+```
 
-      - name: Clean Up
-        run: |
-          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "rm -rf /home/ec2-user/pv_app_api/node_modules"
-          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "npm cache clean --force"
+Removed steps:
 
-      - name: Reinstall Dependencies
-        run: |
-          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
-          cd /home/ec2-user/pv_app_api
-          npm install
-          EOF
+* `Validate Copied Files`: Not necessary, as the `Copy Files to EC2` step already handles the file transfer.
+* `Clean Up`: Removing `node_modules` and running `npm cache clean --force` can be done before reinstalling dependencies, but it's not necessary in this workflow. If you still want to clean up, consider adding it before the `Install and Build Application` step.
+* `Reinstall Dependencies` and `Final Application Restart`: These steps are redundant and can be removed. The `Install and Build Application` step already installs dependencies and builds the application, and the `Restart Application` step restarts the application.
+* `Validate SSH Key`: This step is not necessary, as the `Add and Validate SSH Key` step already adds and validates the SSH key. 
 
-      - name: Final Application Restart
-        run: |
-          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
-          cd /home/ec2-user/pv_app_api
-          pm2 restart app.js -i 0 || pm2 start app.js -i 0
-          EOF
+Note: The above optimized YAML assumes that the application can be built and restarted without any issues. If there are specific requirements or constraints that necessitate the original steps, please consider those before applying these changes.
