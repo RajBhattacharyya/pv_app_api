@@ -1,0 +1,38 @@
+const mongoose = require('mongoose');
+
+const cartItemSchema = new mongoose.Schema({
+  meal: { type: mongoose.Schema.Types.ObjectId, ref: 'Meal', required: true },
+  quantity: { type: Number, required: true, min: 0 }
+});
+
+const bookingSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  eventId: { type: mongoose.Schema.Types.ObjectId, ref: 'Event', required: true },
+  eventDayId: { type: mongoose.Schema.Types.ObjectId, ref: 'EventDay', required: true },
+  cartItems: [cartItemSchema],
+  totalAmount: { type: Number, required: true },
+  paymentMethod: { 
+    type: String, 
+    enum: ['qr', 'neft', 'cash'], 
+    default: 'qr' 
+  },
+  status: { 
+    type: String, 
+    enum: ['booked', 'paid', 'cancelled'], 
+    default: 'booked' 
+  },
+  paymentId: String,
+  currentState: { 
+    type: String, 
+    enum: ['pending', 'approved', 'declined', 'modify'], 
+    default: 'pending' 
+  }
+}, {
+  timestamps: true
+});
+
+// Create a compound unique index on userId and eventDayId
+bookingSchema.index({ userId: 1, eventDayId: 1 }, { unique: true });
+
+const FoodBooking = mongoose.model('FoodBooking', bookingSchema);
+module.exports = FoodBooking;
