@@ -2,36 +2,28 @@ const express = require('express');
 const dotenv = require('dotenv');
 const cors = require('cors');
 const connectDB = require('./config/db');
-const authRoutes = require('./routes/authRoutes');
-const eventRoutes= require('./routes/eventRoutes');
-const eventDayRoutes = require('./routes/eventDayRoutes');
-const itemRoutes = require('./routes/itemRoutes');
-const mealRoutes = require('./routes/mealRoutes');
-const cartRoutes = require('./routes/foodCartRoutes');
-const foodBookingRoutes = require('./routes/foodBookingRoutes');
-const userRoutes = require('./routes/userRoutes');
+const routes = [
+  { path: '/auth', route: require('./routes/authRoutes') },
+  { path: '/event', route: require('./routes/eventRoutes') },
+  { path: '/eventDay', route: require('./routes/eventDayRoutes') },
+  { path: '/item', route: require('./routes/itemRoutes') },
+  { path: '/meal', route: require('./routes/mealRoutes') },
+  { path: '/cart', route: require('./routes/foodCartRoutes') },
+  { path: '/booking', route: require('./routes/foodBookingRoutes') },
+  { path: '/user', route: require('./routes/userRoutes') },
+];
 
 dotenv.config();
 
 const app = express();
 app.use(cors());
+app.use(express.json());
 
 // Connect to MongoDB
 connectDB();
 
-// Middleware
-app.use(express.json());
-
-// Routes
-app.use('/api/v1/auth', authRoutes);
-app.use('/api/v1/event', eventRoutes);
-app.use('/api/v1/eventDay',eventDayRoutes);
-app.use('/api/v1/item', itemRoutes);
-app.use('/api/v1/meal', mealRoutes);
-app.use('/api/v1/cart', cartRoutes);
-app.use('/api/v1/booking', foodBookingRoutes);
-app.use('/api/v1/user', userRoutes);
-
+// Mount routes
+routes.forEach((r) => app.use(`/api/v1/${r.path}`, r.route));
 
 const PORT = process.env.PORT || 3000;
 
