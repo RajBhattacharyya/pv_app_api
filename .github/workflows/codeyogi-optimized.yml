@@ -1,0 +1,73 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+
+      - name: Cache Node.js dependencies
+        uses: actions/cache@v3
+        id: cache
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build and test
+        run: |
+          npm run build
+          npm run test
+
+      - name: Security scanning and dependency checks
+        run: |
+          npm audit
+          npm ls
+
+      - name: Docker build and push
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+          DOCKER_IMAGE: ${{ secrets.DOCKER_IMAGE }}
+        run: |
+          docker build -t $DOCKER_IMAGE .
+          docker tag $DOCKER_IMAGE $DOCKER_IMAGE:latest
+          docker push $DOCKER_IMAGE:latest
+
+      - name: Deploy to production
+        env:
+          PROD_URL: ${{ secrets.PROD_URL }}
+          PROD_TOKEN: ${{ secrets.PROD_TOKEN }}
+        run: |
+          curl -X POST \
+          $PROD_URL/deploy \
+          -H 'Authorization: Bearer $PROD_TOKEN' \
+          -H 'Content-Type: application/json' \
+          -d '{"ref": "main"}'
+
+      - name: Notify on failure
+        if: ${{ failure() }}
+        run: |
+          curl -X POST \
+          https://api.github.com/repos/${GITHUB_REPOSITORY}/issues \
+          -H 'Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}' \
+          -H 'Content-Type: application/json' \
+          -d '{"title": "CI/CD Pipeline failed", "body": "The CI/CD pipeline failed to build and deploy the application."}'
